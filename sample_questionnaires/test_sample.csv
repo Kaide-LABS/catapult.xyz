@@ -1,0 +1,6 @@
+ID,Question,Section
+Q-001,How does your organization encrypt data at rest?,Data Security
+Q-002,Describe your incident response process and escalation timelines.,Incident Response
+Q-003,What access control mechanisms are in place for production systems?,Access Control
+Q-004,How do you ensure GDPR compliance for EU customer data?,Privacy
+Q-005,Provide details of your most recent penetration test results.,Vulnerability Management

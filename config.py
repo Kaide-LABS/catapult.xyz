@@ -14,8 +14,8 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 # RAG Settings
 CHUNK_SIZE = 512          # tokens
 CHUNK_OVERLAP = 50        # tokens
-TOP_K = 15                # retrieval candidates before reranking
-RERANK_TOP_N = 3          # after FlashRank re-ranking
+TOP_K = 20                # retrieval candidates before reranking
+RERANK_TOP_N = 5          # after FlashRank re-ranking
 CHROMA_COLLECTION = "policy_knowledge_base"
 CHROMA_PERSIST_DIR = "rag/knowledge_base/chroma_db"
 

@@ -1,6 +1,13 @@
 from pydantic import BaseModel, field_validator, model_validator
-from typing import TypedDict, Literal
+from typing import TypedDict, Literal, Annotated
 from datetime import datetime
+import operator
+
+def update_dict(old_dict: dict, new_dict: dict) -> dict:
+    if old_dict is None:
+        return new_dict
+    old_dict.update(new_dict)
+    return old_dict
 
 class QuestionPayload(BaseModel):
     id: str
@@ -66,9 +73,10 @@ class VSQState(TypedDict):
     file_path: str
     file_name: str
     file_type: str                              # pdf, xlsx, docx, csv
-    questions: list[QuestionPayload]
-    retrieval_results: dict[str, RetrievalResult]  # question_id -> result
-    drafted_answers: dict[str, DraftedAnswer]       # question_id -> draft
-    approved_answers: dict[str, ApprovedAnswer]     # question_id -> approved
-    processing_log: list[str]                       # real-time agent activity log
+    questions: Annotated[list[QuestionPayload], operator.add]
+    retrieval_results: Annotated[dict[str, RetrievalResult], update_dict]
+    drafted_answers: Annotated[dict[str, DraftedAnswer], update_dict]
+    approved_answers: Annotated[dict[str, ApprovedAnswer], update_dict]
+    processing_log: Annotated[list[str], operator.add]
     framework_detected: str                         # SIG, CAIQ, NIST, Custom
+    export_path: str

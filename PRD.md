@@ -717,13 +717,91 @@ After Phase 1 is complete, run:
 - [ ] `rag/retriever.py` — queries ChromaDB, re-ranks via FlashRank, returns `RetrievalResult`
 - [ ] All 4 verification commands pass
 
-### Phase 2: Agent Core
-- LangGraph workflow definition
-- Intake Agent (Docling + question extraction)
-- Retrieval Agent (embedding + ChromaDB + re-ranking)
-- Drafting Agent (constrained generation + citation enforcement)
-- Routing Agent (confidence thresholds)
-- Export Agent (Excel generation)
+### Phase 2: Agent Core (Revised)
+
+**Goal**: Implement all 5 LangGraph agents and wire them into a complete workflow graph using parallel processing (Map-Reduce) to meet enterprise performance expectations. After Phase 2, we should be able to programmatically run the full pipeline.
+
+**Prerequisite**: Phase 1 complete. ChromaDB indexed with policy docs. All schemas in `models/schemas.py` available.
+
+#### Step 1: LangGraph Workflow Definition
+
+Create **`agents/graph.py`**:
+
+```python
+"""
+LangGraph state machine defining the VSQ Compliance Engine workflow.
+Nodes: intake → parallel retrieval & drafting (Map-Reduce) → routing → export
+State: VSQState (defined in models/schemas.py)
+"""
+```
+
+The graph must:
+1. Import `VSQState` from `models/schemas.py`
+2. Define a `StateGraph` with `VSQState`. Note that collections like `processing_log` must use `typing.Annotated` with reducers.
+3. Add nodes: `intake`, `process_question` (a mapped node that runs retrieval, drafting, and routing per question in parallel), `export`
+4. Wire edges to support `Send` API (Map-Reduce) for parallel question processing.
+5. Compile the graph with `graph = workflow.compile()`
+
+**Key design decisions:**
+- Parallel processing using LangGraph Send API to process 100s of questions concurrently.
+- State fields like `processing_log`, `drafted_answers`, and `approved_answers` use reducers to handle concurrent updates.
+
+#### Step 2: Intake Agent
+
+Create **`agents/intake_agent.py`**:
+
+```python
+"""
+Omnichannel Intake Agent.
+Parses uploaded files (PDF, XLSX, DOCX, CSV) deterministically.
+Uses Gemini 2.5 Flash ONLY for domain tagging and cleaning, NOT for raw extraction from bulk text.
+"""
+```
+
+The intake agent must:
+1. **File parsing**: Use `openpyxl` or `pandas` to deterministically extract rows/questions for Excel/CSV.
+2. **Domain tagging**: Call Gemini 2.5 Flash on the cleaned questions to assign the domain.
+3. Return `Send` commands for each extracted question to trigger parallel processing.
+
+#### Step 3: Retrieval Agent
+
+Create **`agents/retrieval_agent.py`**:
+
+Similar to before, but operates on a single `QuestionPayload` at a time (as part of the parallel map step), calling ChromaDB with `top_k=20`, then FlashRank.
+
+#### Step 4: Drafting Agent
+
+Create **`agents/drafting_agent.py`**:
+
+The drafting agent must:
+1. Implement a two-step Chain-of-Thought approach to enforce citations without hallucination.
+2. First step: Prompt LLM to extract verbatim quotes from the retrieved chunks relevant to the question.
+3. Second step: Draft the final answer based *only* on the extracted quotes.
+4. Uses Gemini 3.1 Pro Preview with Pydantic structured output.
+
+#### Step 5: Routing Agent
+
+Create **`agents/routing_agent.py`**:
+
+Operates on a single `DraftedAnswer`.
+Applies confidence thresholds to determine status (`AUTO_APPROVED` or `PENDING_REVIEW`).
+
+#### Step 6: Export Agent
+
+Create **`agents/export_agent.py`**:
+
+The export agent must:
+1. Load the *original* uploaded Excel file via `openpyxl`.
+2. Inject the answers into the exact cells/columns they belong to, preserving original formatting.
+3. Append a new worksheet "Audit Trail" containing the citation lineage.
+4. Save to a temporary file path.
+
+#### Step 7: Wire It All Together
+
+Update `agents/__init__.py` to expose the compiled graph.
+
+#### Step 8: Verification
+Same as original Phase 2, but testing parallel execution and original Excel format retention.
 
 ### Phase 3: Frontend
 - Module Hub landing page (Trojan Horse)
