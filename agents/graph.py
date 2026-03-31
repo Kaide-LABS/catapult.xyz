@@ -20,17 +20,22 @@ def dispatch_questions(state: VSQState):
 def process_question_node(state: QuestionState):
     q = state["question"]
     
+    log_entries = []
+
     retrieval_res = perform_retrieval(q)
+    log_entries.append(f"[Retrieval] Q-{q.id}: {len(retrieval_res.chunks)} chunks, confidence={retrieval_res.retrieval_confidence:.2f}")
+
     draft_res = perform_drafting(q, retrieval_res)
+    log_entries.append(f"[Drafting] Q-{q.id}: confidence={draft_res.confidence_score:.2f}, citations={len(draft_res.citations)}, sme_review={draft_res.requires_sme_review}")
+
     approved_res = perform_routing(draft_res)
-    
-    log_msg = f"[Process] Q-{q.id}: confidence={approved_res.confidence_score:.2f}, status={approved_res.status}"
-    
+    log_entries.append(f"[Routing] Q-{q.id}: status={approved_res.status}")
+
     return {
         "retrieval_results": {q.id: retrieval_res},
         "drafted_answers": {q.id: draft_res},
         "approved_answers": {q.id: approved_res},
-        "processing_log": [log_msg]
+        "processing_log": log_entries
     }
 
 workflow = StateGraph(VSQState)

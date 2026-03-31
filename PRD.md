@@ -804,12 +804,350 @@ Update `agents/__init__.py` to expose the compiled graph.
 Same as original Phase 2, but testing parallel execution and original Excel format retention.
 
 ### Phase 3: Frontend
-- Module Hub landing page (Trojan Horse)
-- VSQ Upload page
-- VSQ Processing page (real-time feed)
-- VSQ Review page (filtering + approval)
-- VSQ Export page
-- Architecture placeholder pages
+
+**Goal**: Build the complete Streamlit frontend — the Module Hub "Trojan Horse" landing page, the 4-step VSQ Engine flow (Upload → Processing → Review → Export), and the two "Architecture Ready" placeholder pages. After Phase 3, the full demo should be runnable end-to-end via `streamlit run app.py`.
+
+**Prerequisite**: Phase 2 complete. `agents/graph.py` exposes `run_pipeline()`. All agent nodes functional. ChromaDB indexed.
+
+#### Step 1: App Entry Point & Navigation
+
+Create **`app.py`** (project root):
+
+```python
+"""
+Streamlit entry point for the Scatterbot Agentic Sidecar Suite.
+Uses st.session_state for navigation and pipeline state persistence.
+"""
+```
+
+The entry point must:
+1. Set page config: `st.set_page_config(page_title="Scatterbot Sidecar Suite", page_icon="🚀", layout="wide")`
+2. Import and apply custom CSS from `ui/styles.py`
+3. Implement a simple navigation system using `st.session_state["current_page"]` with these values:
+   - `"module_hub"` (default)
+   - `"vsq_upload"`
+   - `"vsq_processing"`
+   - `"vsq_review"`
+   - `"vsq_export"`
+   - `"arch_fde"`
+   - `"arch_kinetic"`
+4. Route to the appropriate page module based on `current_page`
+5. **Do NOT use Streamlit's multi-page app (pages/ directory)** — use session state routing instead, so we have full control over navigation and state.
+
+#### Step 2: Custom Styles
+
+Create **`ui/styles.py`**:
+
+```python
+"""
+Custom CSS for professional enterprise styling.
+Returns a CSS string to be injected via st.markdown(css, unsafe_allow_html=True).
+"""
+```
+
+Must include styles for:
+1. **Module Hub cards**: bordered containers with hover shadow, consistent height (~300px), rounded corners
+2. **Status badges**:
+   - `.badge-live`: green background (#22c55e), white text, subtle pulse animation (`@keyframes pulse`)
+   - `.badge-ready`: blue-gray background (#64748b), white text
+3. **Processing feed**: monospace font, dark background (#1e1e2e), green text (#4ade80), scrollable container (max-height 400px)
+4. **Confidence indicators**: color-coded spans — green (>=0.95), amber (0.80-0.95), red (<0.80)
+5. **General**: Hide default Streamlit header/footer hamburger menu for cleaner demo look
+6. **Font**: Use a clean sans-serif stack, slightly larger base font (16px)
+
+Export a function `inject_styles()` that calls `st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)`.
+
+#### Step 3: Shared UI Components
+
+Create **`ui/components.py`**:
+
+```python
+"""
+Reusable UI components shared across pages.
+"""
+```
+
+Must include:
+1. `render_header()` — renders the "Scatterbot Agentic Sidecar Suite" header with tagline "Enterprise deployment infrastructure for AI workspaces"
+2. `render_footer()` — renders "Architected for Catapult by Scatterbot" in small muted text
+3. `render_back_button(label: str, target_page: str)` — navigates back via session state
+4. `render_confidence_badge(score: float) -> str` — returns HTML span with color-coded confidence value
+5. `render_status_badge(status: str) -> str` — returns HTML for AUTO_APPROVED (green) / PENDING_REVIEW (amber)
+
+#### Step 4: Module Hub Landing Page (CRITICAL — The Trojan Horse)
+
+Create **`ui/module_hub.py`**:
+
+```python
+"""
+Module Hub — the landing page that visually pitches all 3 modules.
+Only VSQ Engine is live. Virtual FDE and Kinetic Dispatcher show 'Architecture Ready'.
+This is the Trojan Horse: the demo starts by showing the full scope of what Scatterbot can build.
+"""
+```
+
+The Module Hub must:
+1. Call `render_header()`
+2. Create `st.columns(3)` with three cards:
+
+   **Card 1 — Virtual FDE Data Sanitation Pipeline:**
+   - Use `st.container()` with custom HTML/CSS for the card styling
+   - Icon: 🛡️
+   - Status: `<span class="badge-ready">Architecture Ready</span>`
+   - Subtitle: "Pre-Ingestion Data Sanitation"
+   - Description: "Autonomous PII redaction, dynamic RBAC mapping, and vector lifecycle management. Ensures your RAG pipeline ingests only pristine, compliant data."
+   - Button: "View Architecture →" — navigates to `arch_fde`
+
+   **Card 2 — Kinetic Action Dispatcher:**
+   - Icon: ⚡
+   - Status: `<span class="badge-ready">Architecture Ready</span>`
+   - Subtitle: "Post-Generation Execution"
+   - Description: "Translates AI-generated insights into deterministic API calls across enterprise systems. HITL validation gates ensure safe kinetic execution."
+   - Button: "View Architecture →" — navigates to `arch_kinetic`
+
+   **Card 3 — VSQ Compliance Engine:**
+   - Icon: ✅
+   - Status: `<span class="badge-live">Live Demo</span>` (with CSS pulse animation)
+   - Subtitle: "Automated Security Questionnaires"
+   - Description: "Multi-agent system that autonomously ingests, answers, and routes vendor security questionnaires with deterministic citation enforcement."
+   - Button: "Launch Demo →" — navigates to `vsq_upload`
+
+3. Call `render_footer()`
+
+**Visual priority**: The VSQ card should visually stand out — consider a slightly different border color (green) or elevated shadow compared to the other two cards.
+
+#### Step 5: VSQ Upload Page
+
+Create **`ui/vsq_upload.py`**:
+
+```python
+"""
+VSQ Engine Step 1: Upload a security questionnaire.
+Supports XLSX, CSV, PDF, DOCX.
+Shows framework auto-detection and question preview before processing.
+"""
+```
+
+The upload page must:
+1. `render_header()` + breadcrumb: "Module Hub → VSQ Engine → Upload"
+2. `render_back_button("← Back to Module Hub", "module_hub")`
+3. **File uploader**: `st.file_uploader("Upload your questionnaire", type=["xlsx", "csv", "pdf", "docx"])`
+4. On file upload:
+   - Save to a temp file (use `tempfile.NamedTemporaryFile`)
+   - Store `file_path`, `file_name`, `file_type` in `st.session_state`
+   - Run the **intake agent only** (not full pipeline) to extract questions and detect framework
+   - Display detected framework in a colored badge: `st.success(f"Framework detected: {framework}")`
+   - Show extracted questions in `st.dataframe()` with columns: ID, Question, Domain, Section, Requires Evidence
+   - Show count: `st.metric("Questions Extracted", len(questions))`
+5. **Sidebar**: Knowledge base status panel:
+   - Query ChromaDB for collection stats (number of documents, total chunks)
+   - Display: "📚 Knowledge Base: 7 policies indexed, {N} chunks available"
+6. **"Begin Processing" button**: Only enabled when questions are extracted. On click:
+   - Store the extracted questions and framework in `st.session_state`
+   - Navigate to `vsq_processing`
+
+**Important**: The intake agent should run synchronously on upload so the user sees the preview immediately. The rest of the pipeline (retrieval → drafting → routing → export) runs on the processing page.
+
+#### Step 6: VSQ Processing Page (The "Wow" Moment)
+
+Create **`ui/vsq_processing.py`**:
+
+```python
+"""
+VSQ Engine Step 2: Watch agents process questions in real-time.
+Shows a live activity feed, progress bar, and statistics dashboard.
+This is the 'wow' moment of the demo — the audience watches AI agents work.
+"""
+```
+
+The processing page must:
+1. `render_header()` + breadcrumb: "Module Hub → VSQ Engine → Processing"
+2. Retrieve `questions`, `file_path`, `file_name`, `file_type`, `framework_detected` from `st.session_state`
+3. **Layout**: Two columns — left (70%) for activity feed, right (30%) for live stats
+4. **Left column — Activity Feed**:
+   - Dark-themed container with monospace font (use the CSS class from styles.py)
+   - Use `st.empty()` containers to stream log entries as they appear
+   - Each log entry should appear with a slight visual distinction by agent:
+     - `[Intake]` — blue
+     - `[Retrieval]` — purple
+     - `[Drafting]` — orange
+     - `[Routing]` — green/amber depending on result
+     - `[Export]` — white
+5. **Progress bar**: `st.progress()` updated as each question completes: `{completed}/{total} questions processed`
+6. **Right column — Live Statistics**:
+   - Use `st.metric()` widgets that update as processing progresses:
+     - "Auto-Approved" (green delta)
+     - "Needs Review" (amber)
+     - "Average Confidence" (formatted to 2 decimal places)
+     - "Questions Processed"
+7. **Pipeline execution approach**:
+   - Since LangGraph `invoke()` is blocking, run the pipeline in a thread or use `st.status()` for progress indication
+   - **Recommended approach**: Instead of calling `run_pipeline()` directly, call each agent step manually and update the UI between steps:
+     ```python
+     # Run intake (already done on upload page — reuse from session_state)
+     # For each question, run retrieval → drafting → routing, updating UI after each
+     # Finally run export
+     ```
+   - This gives granular control over the activity feed updates
+   - Store intermediate results in `st.session_state` as they complete
+8. **On completion**:
+   - Show a success banner: `st.success("Processing complete! All {N} questions answered.")`
+   - Auto-navigate or show button: "Review Answers →" — navigates to `vsq_review`
+
+**Implementation note**: For the demo, processing 5 questions will take ~15-30 seconds (API latency). The real-time feed creates the impression of watching an intelligent system work — this is the emotional hook. Make the feed visually engaging.
+
+#### Step 7: VSQ Review Page
+
+Create **`ui/vsq_review.py`**:
+
+```python
+"""
+VSQ Engine Step 3: Review and approve drafted answers.
+Filterable table with expandable rows showing full answer details,
+citations, and approval actions.
+"""
+```
+
+The review page must:
+1. `render_header()` + breadcrumb: "Module Hub → VSQ Engine → Review"
+2. `render_back_button("← Back to Processing", "vsq_processing")`
+3. Retrieve `approved_answers`, `drafted_answers`, `retrieval_results`, `questions` from `st.session_state`
+4. **Filter bar** (horizontal row of filters):
+   - Status filter: `st.selectbox` — "All", "Auto-Approved", "Pending Review"
+   - Domain filter: `st.selectbox` — "All" + unique domains from questions
+   - Confidence range: `st.slider` — range 0.0 to 1.0
+5. **Summary metrics row**: 4 columns with `st.metric()`:
+   - Total Questions
+   - Auto-Approved (with green indicator)
+   - Pending Review (with amber indicator)
+   - Average Confidence
+6. **Answer cards**: For each filtered answer, render an expandable card using `st.expander()`:
+   - **Header line**: `Q-{id} | {domain} | {confidence_badge} | {status_badge}`
+   - **Expanded content**:
+     - **Original Question**: displayed in a quote block
+     - **Generated Answer**: full answer text with inline `[Source: ...]` citations highlighted (use `st.markdown` with custom HTML to make citations visually distinct — e.g., light blue background)
+     - **Citations table**: `st.dataframe()` with columns: Source Document, Section, Verbatim Quote
+     - **Confidence reasoning**: italic text explaining the confidence score
+     - **Action buttons** (in a row):
+       - "✅ Approve" — sets status to `SME_APPROVED`, updates `st.session_state`
+       - "✏️ Edit & Approve" — opens a `st.text_area` pre-filled with the answer for editing, then approves on submit
+       - "🚩 Flag for SME" — sets a flag (visual indicator only for the demo)
+7. **Bulk approve button**: "Approve All Auto-Approved" — batch-approves all answers with status `AUTO_APPROVED` → `SME_APPROVED`
+8. **"Proceed to Export" button**: navigates to `vsq_export`
+
+#### Step 8: VSQ Export Page
+
+Create **`ui/vsq_export.py`**:
+
+```python
+"""
+VSQ Engine Step 4: Download completed questionnaire and audit trail.
+Shows summary statistics and provides download buttons.
+"""
+```
+
+The export page must:
+1. `render_header()` + breadcrumb: "Module Hub → VSQ Engine → Export"
+2. `render_back_button("← Back to Review", "vsq_review")`
+3. Retrieve `export_path`, `approved_answers`, `questions` from `st.session_state`
+4. **Summary statistics** in a clean 4-column layout:
+   - "Total Questions Answered": `st.metric()`
+   - "Auto-Approval Rate": percentage with delta indicator
+   - "Average Confidence": formatted to 2 decimal
+   - "Estimated Time Saved": calculate as `len(questions) * 10 minutes` (baseline) displayed as hours vs. actual processing time. Show something like "~40 hours → 2 minutes"
+5. **Download section**:
+   - **Download Completed Questionnaire**: `st.download_button()` for the Excel file at `export_path`
+   - **Download Audit Trail**: `st.download_button()` for a JSON file containing all citations with full lineage (generate this from `approved_answers` — serialize to JSON)
+6. **Visual summary**: A simple bar chart or table showing answers by status (AUTO_APPROVED vs PENDING_REVIEW) and by domain
+7. **"Return to Module Hub" button**: navigates back to `module_hub`
+
+#### Step 9: Architecture Placeholder Pages
+
+Create **`ui/architecture_fde.py`**:
+
+```python
+"""
+Virtual FDE Data Sanitation Pipeline — Architecture Ready page.
+Shows the architecture concept and positions it as a future engagement.
+"""
+```
+
+Must include:
+1. `render_header()` + `render_back_button("← Back to Module Hub", "module_hub")`
+2. Title: "Virtual FDE Data Sanitation Pipeline"
+3. Badge: `<span class="badge-ready">Architecture Ready</span>`
+4. **Architecture diagram** using `st.markdown()` with a Mermaid diagram (Streamlit supports Mermaid via markdown code blocks):
+   ```mermaid
+   graph LR
+       A[Raw Data Sources] --> B[PII Detection & Redaction]
+       B --> C[Dynamic RBAC Mapping]
+       C --> D[Vector Lifecycle Manager]
+       D --> E[Clean RAG Pipeline]
+   ```
+5. **Key capabilities** (bullet list):
+   - Autonomous PII detection across 40+ entity types (SSN, email, phone, credit card, etc.)
+   - Context-aware redaction preserving semantic meaning for embeddings
+   - Dynamic RBAC mapping — documents inherit access policies from source systems
+   - Vector lifecycle management — automated re-indexing on policy changes
+   - Compliance audit trail for every transformation
+6. **Technical specification badge**: "📋 Full Technical Specification Available"
+7. **CTA**: Muted text: "Contact Scatterbot to discuss implementation → scatterbot.ai"
+
+Create **`ui/architecture_kinetic.py`**:
+
+```python
+"""
+Kinetic Action Dispatcher — Architecture Ready page.
+Shows the architecture concept for post-generation execution.
+"""
+```
+
+Must include:
+1. `render_header()` + `render_back_button("← Back to Module Hub", "module_hub")`
+2. Title: "Kinetic Action Dispatcher"
+3. Badge: `<span class="badge-ready">Architecture Ready</span>`
+4. **Architecture diagram** (Mermaid):
+   ```mermaid
+   graph LR
+       A[AI-Generated Insight] --> B[Intent Parser]
+       B --> C[Action Planner]
+       C --> D{HITL Gate}
+       D -->|Approved| E[API Executor]
+       D -->|Rejected| F[Feedback Loop]
+       E --> G[Enterprise Systems]
+   ```
+5. **Key capabilities**:
+   - Translates natural language AI outputs into deterministic API calls
+   - Human-in-the-loop validation gates for irreversible actions
+   - Pre-built connectors: Jira, Slack, Salesforce, GitHub, PagerDuty
+   - Action rollback and audit logging
+   - Rate limiting and circuit breaker patterns for safe execution
+6. **Technical specification badge** and **CTA** (same pattern as FDE page)
+
+#### Step 10: Verification
+
+After Phase 3 is complete, run:
+1. `streamlit run app.py` — must launch without errors
+2. **Module Hub**: All 3 cards render, "Live Demo" badge pulses green, clicking "Launch Demo" navigates to upload
+3. **Upload**: Upload `sample_questionnaires/test_sample.csv`, verify framework detection ("Custom") and 5 questions shown in preview table
+4. **Processing**: Click "Begin Processing", verify real-time activity feed shows agent logs, progress bar advances, statistics update
+5. **Review**: Verify all 5 answers displayed with expandable details, filters work, approve/edit buttons functional
+6. **Export**: Download button produces an Excel file with answers and audit trail sheet
+7. **Architecture pages**: Both render with Mermaid diagrams and capability lists
+
+#### Acceptance Criteria (Phase 3)
+- [ ] `app.py` — Streamlit entry point with session-state navigation
+- [ ] `ui/styles.py` — Professional CSS with card styling, badges, feed styling, confidence colors
+- [ ] `ui/components.py` — Shared header, footer, back button, badge renderers
+- [ ] `ui/module_hub.py` — 3-card layout, VSQ card highlighted with "Live Demo" pulse
+- [ ] `ui/vsq_upload.py` — File upload, framework detection, question preview, knowledge base sidebar
+- [ ] `ui/vsq_processing.py` — Real-time activity feed, progress bar, live statistics
+- [ ] `ui/vsq_review.py` — Filterable answers, expandable cards with citations, approve/edit/flag actions
+- [ ] `ui/vsq_export.py` — Download buttons, summary statistics, time saved estimate
+- [ ] `ui/architecture_fde.py` — Mermaid diagram, capability list, CTA
+- [ ] `ui/architecture_kinetic.py` — Mermaid diagram, capability list, CTA
+- [ ] Full demo flow works end-to-end: Module Hub → Upload → Process → Review → Export → Module Hub
+- [ ] All navigation via session state (no Streamlit pages/ directory)
 
 ### Phase 4: Polish & Demo Prep
 - Sample questionnaires (SIG, CAIQ)
